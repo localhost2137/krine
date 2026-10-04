@@ -38,6 +38,8 @@ def main():
     parser.add_argument("--url", default="http://127.0.0.1:8080")
     parser.add_argument("--browser-origin", default="http://localhost:3000")
     parser.add_argument("--secrets-dir", type=Path, default=Path("deploy/secrets"))
+    parser.add_argument("--client-ip", default="127.0.0.1",
+                        help="IP Krine observes for browser calls (e.g. the Docker bridge gateway)")
     parser.add_argument("--output-dir", type=Path, default=Path(".demo/report-gateway"))
     args = parser.parse_args()
     endpoint = urllib.parse.urlsplit(args.url)
@@ -109,7 +111,7 @@ def main():
                     "client_id": context["client_id"], "session_id": context["session_id"],
                     "user_id": user_id, "properties": {"synthetic_demo": True, "scenario": label}}, "server")
             body = {"operation_id": str(uuid.uuid4()), "check": check, "proof": proof["proof"],
-                    "ip": "127.0.0.1", "user_id": user_id, "inputs": inputs}
+                    "ip": args.client_ip, "user_id": user_id, "inputs": inputs}
             decision = request("/v1/checks/evaluate", body, "server")
             if decision["outcome"] != expected:
                 raise RuntimeError(f"{label}: expected {expected}, received {decision['outcome']}")
@@ -141,7 +143,16 @@ if __name__ == "__main__":
         main()
     except urllib.error.HTTPError as error:
         # Never print request headers, credentials or proof bodies.
-        print(f"Krine returned HTTP {error.code}. Check URL, allowed browser origin and local credentials.", file=sys.stderr)
+        try:
+            detail = json.load(error)["error"]
+            reason = f" ({detail['code']}: {detail['message']})"
+        except (ValueError, KeyError, TypeError):
+            reason = ""
+        print(f"Krine returned HTTP {error.code} for {urllib.parse.urlsplit(error.url).path}{reason}", file=sys.stderr)
+        if "proof" in reason:
+            print("If Krine runs in Docker, pass --client-ip with the address it observes (often the bridge gateway, e.g. 172.20.0.1).", file=sys.stderr)
+        else:
+            print("Check URL, allowed browser origin and local credentials.", file=sys.stderr)
         sys.exit(1)
     except (OSError, RuntimeError, ValueError, KeyError) as error:
         print(f"Demo stopped: {error}", file=sys.stderr)
