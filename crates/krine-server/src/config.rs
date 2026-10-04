@@ -74,7 +74,7 @@ impl Config {
         };
         if result.server_secret.len() < 32
             || result.public_key.len() < 16
-            || result.admin_password.len() < 16
+            || (result.admin_password.len() < 16 && !result.development)
             || result.max_pending_outbox < 1
         {
             return Err("Secrets or outbox capacity do not meet minimum requirements".into());

@@ -31,7 +31,7 @@ or logs.
 | `KRINE_CLICKHOUSE_PASSWORD` | ClickHouse password |
 | `KRINE_PUBLIC_KEY` | Browser key imported once on first startup; 16–512 printable ASCII bytes without spaces |
 | `KRINE_SERVER_SECRET` | Distinct server secret imported once on first startup; 32–512 printable ASCII bytes without spaces |
-| `KRINE_ADMIN_PASSWORD` | Operator password, at least 16 bytes |
+| `KRINE_ADMIN_PASSWORD` | Operator password, at least 16 bytes unless `KRINE_DEVELOPMENT=true` |
 | `KRINE_PUBLIC_URL` | Exact external API origin, without trailing slash |
 | `KRINE_ADMIN_ORIGIN` | Exact dashboard origin; defaults to public URL |
 | `KRINE_ALLOWED_ORIGINS` | Comma-separated exact browser application origins |

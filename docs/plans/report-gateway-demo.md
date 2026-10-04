@@ -25,8 +25,8 @@ python3 scripts/demo-report-gateway.py \
 For a standard local installation, omit those options. The runner defaults to
 port 8080 and `deploy/secrets`. Its browser origin defaults to
 `http://localhost:3000`; use `--browser-origin` to match your configured allowed
-origin. When Krine runs in Docker it observes the bridge gateway rather than
-`127.0.0.1`; pass that address with `--client-ip` (for example `172.20.0.1`).
+origin. It detects the client IP Krine observes for browser calls (the Docker
+bridge gateway when containerized); `--client-ip` overrides it.
 It refuses remote targets. It creates and publishes only the dedicated
 `demo_report_gateway` check and never overwrites an existing edited policy.
 

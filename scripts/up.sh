@@ -26,6 +26,7 @@ public_url=$(printf '%s\n' "$compose_environment" | sed -n 's/^KRINE_PUBLIC_URL=
 example_port=$(printf '%s\n' "$compose_environment" | sed -n 's/^KRINE_EXAMPLE_PORT=//p')
 unset compose_environment
 export KRINE_SECRETS_DIR
+if "$local"; then export KRINE_LOCAL_ADMIN_PASSWORD=admin_password; fi
 ./scripts/init-secrets.sh
 docker compose "$@" build
 # A schema upgrade must never overlap old and new application writers. Close
@@ -33,7 +34,11 @@ docker compose "$@" build
 if "$example"; then docker compose "$@" stop example-ingress example; fi
 docker compose "$@" stop app
 docker compose "$@" up -d --wait --wait-timeout 180
-printf 'Krine is ready at %s. Sign in with the admin_password secret.\n' "$public_url"
+if "$local"; then
+    printf 'Krine is ready at %s. Sign in with password: admin_password\n' "$public_url"
+else
+    printf 'Krine is ready at %s. Sign in with the password in %s/admin_password.\n' "$public_url" "$KRINE_SECRETS_DIR"
+fi
 if "$example"; then
     printf 'Draftroom is ready at http://localhost:%s. Review and publish can_claim_trial before requesting a trial.\n' "$example_port"
     printf 'Read examples/protected-app/README.md for account passwords and the policy walkthrough.\n'

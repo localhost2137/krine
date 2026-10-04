@@ -6,6 +6,11 @@ set -eu
 for name in postgres_password valkey_password clickhouse_password browser_public_key server_secret admin_password; do
     path=/run/secrets/$name
     value=$(cat "$path")
+    if [ "$name" = admin_password ]; then
+        [ -n "$value" ] || { echo "Invalid secret file: $name" >&2; exit 1; }
+        export KRINE_ADMIN_PASSWORD="$value"
+        continue
+    fi
     case "$value" in
         *[!a-fA-F0-9]*|'') echo "Invalid secret file: $name" >&2; exit 1 ;;
     esac

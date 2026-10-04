@@ -14,6 +14,13 @@ for name in postgres_admin_password postgres_password valkey_password clickhouse
         echo "Refusing symlink: $path" >&2
         exit 1
     fi
+    if [ "$name" = admin_password ] && [ -n "${KRINE_LOCAL_ADMIN_PASSWORD:-}" ]; then
+        # Local HTTP installs use a memorable operator password.
+        rm -f "$path"
+        (set -C; printf '%s\n' "$KRINE_LOCAL_ADMIN_PASSWORD" > "$path")
+        chmod 600 "$path"
+        continue
+    fi
     if [ ! -e "$path" ]; then
         generated_secret=$(openssl rand -hex 32)
         # noclobber also prevents concurrent invocations replacing a secret.

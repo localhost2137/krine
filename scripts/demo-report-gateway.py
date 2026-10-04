@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sqlite3
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -38,8 +39,7 @@ def main():
     parser.add_argument("--url", default="http://127.0.0.1:8080")
     parser.add_argument("--browser-origin", default="http://localhost:3000")
     parser.add_argument("--secrets-dir", type=Path, default=Path("deploy/secrets"))
-    parser.add_argument("--client-ip", default="127.0.0.1",
-                        help="IP Krine observes for browser calls (e.g. the Docker bridge gateway)")
+    parser.add_argument("--client-ip", help="IP Krine observes for browser calls; detected when omitted")
     parser.add_argument("--output-dir", type=Path, default=Path(".demo/report-gateway"))
     args = parser.parse_args()
     endpoint = urllib.parse.urlsplit(args.url)
@@ -66,6 +66,17 @@ def main():
         req = urllib.request.Request(url + path, data=data, headers=headers, method=method)
         with opener.open(req, timeout=15) as response:
             return json.load(response)
+
+    def observed_ip(session_id):
+        # Proofs bind to the IP Krine saw (the Docker gateway when containerized).
+        query = urllib.parse.urlencode({"name": "browser.context", "entity": session_id,
+                                        "entity_kind": "session", "limit": 1})
+        for _ in range(50):
+            items = request("/v1/admin/activity/events?" + query).get("items", [])
+            if items and items[0].get("ip"):
+                return items[0]["ip"]
+            time.sleep(0.1)
+        raise RuntimeError("Could not detect the client IP Krine observed; pass --client-ip.")
 
     csrf = request("/v1/admin/session", {"password": secrets["admin_password"]})["csrf_token"]
     path = "/v1/admin/checks/" + check
@@ -105,6 +116,7 @@ def main():
             context = request("/v1/browser/context", {"signals": signals}, "browser")
             proof = request("/v1/browser/proofs", {"client_token": context["client_token"],
                 "session_token": context["session_token"], "check": check}, "browser")
+            args.client_ip = args.client_ip or observed_ip(context["session_id"])
             user_id = "demo_" + run_id + "_" + label
             for _ in range(count):
                 request("/v1/events", {"event_id": str(uuid.uuid4()), "name": "report_submission_requested",
@@ -149,10 +161,7 @@ if __name__ == "__main__":
         except (ValueError, KeyError, TypeError):
             reason = ""
         print(f"Krine returned HTTP {error.code} for {urllib.parse.urlsplit(error.url).path}{reason}", file=sys.stderr)
-        if "proof" in reason:
-            print("If Krine runs in Docker, pass --client-ip with the address it observes (often the bridge gateway, e.g. 172.20.0.1).", file=sys.stderr)
-        else:
-            print("Check URL, allowed browser origin and local credentials.", file=sys.stderr)
+        print("Check URL, allowed browser origin and local credentials.", file=sys.stderr)
         sys.exit(1)
     except (OSError, RuntimeError, ValueError, KeyError) as error:
         print(f"Demo stopped: {error}", file=sys.stderr)
