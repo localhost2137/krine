@@ -260,7 +260,7 @@ pub(crate) fn query_sql(
     let mut dimensions =
         format!("('bucket',intDiv(at,{{bucket:Int64}})*{{bucket:Int64}},{category})");
     if kind == "decision" {
-        dimensions.push_str(",('check',toInt64(0),nullIf(activity_check,'')),('reason',toInt64(0),if(activity_reason IN ('rule_matched','unknown_denied','otherwise','verification_required','verification_failed','verification_expired','verification_unavailable'),activity_reason,NULL))");
+        dimensions.push_str(",('check',toInt64(0),nullIf(activity_check,'')),('reason',toInt64(0),if(activity_reason IN ('rule_matched','workflow_branch','unknown_denied','otherwise','verification_required','verification_failed','verification_expired','verification_unavailable'),activity_reason,NULL))");
     }
     let mut sql = format!(
         "SELECT item.1 AS section,item.2 AS bucket,item.3 AS value,count() AS n \

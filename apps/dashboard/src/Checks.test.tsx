@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
@@ -7,6 +7,13 @@ import type { Mutation } from "./api";
 import { CheckPage } from "./Checks";
 import type { Check, Metric, Policy, Version } from "./types";
 
+vi.mock('./PolicyFlow', () => ({ PolicyFlow: () => <div aria-label="Workflow canvas" /> }));
+
+beforeAll(() => {
+  HTMLDialogElement.prototype.show = function () { this.open = true; };
+  HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  HTMLDialogElement.prototype.close = function () { this.open = false; };
+});
 const policy: Policy = {
   schema_version: 1,
   inputs: {},
@@ -78,6 +85,15 @@ function mount(path = "/checks/can_claim_trial?view=draft") {
 }
 
 describe("check workflows", () => {
+  it("opens the working graph by default even when a version is active", async () => {
+    current.draft = {schema_version:2, entry:"DENY", inputs:{}, rules:[], otherwise:"DENY"};
+    const run = vi.spyOn(api, "run");
+    mount("/inspect/check?name=can_claim_trial");
+    expect(await screen.findByRole("button", {name:"＋ Add step"})).toBeTruthy();
+    expect(screen.getByText("Editing draft · Active v2")).toBeTruthy();
+    expect(screen.queryByText(/read-only policy preview/)).toBeNull();
+    expect(run).not.toHaveBeenCalled();
+  });
   it("keeps edits and blocks publication after a failed save, with navigation protection and explicit retry", async () => {
     const user = userEvent.setup();
     const run = vi

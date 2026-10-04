@@ -13,3 +13,4 @@ test-results/
 deploy/secrets/
 *.log
 __pycache__/
+.demo/

@@ -16,6 +16,25 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sqlx::{Postgres, QueryBuilder, Row, Transaction};
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PolicyPreview {
+    policy: Policy,
+    snapshot: krine_core::Snapshot,
+    #[serde(default)]
+    verification: std::collections::BTreeMap<String, krine_core::Verification>,
+}
+
+/// Pure, synthetic evaluation: no decisions, counters, providers or drafts are written.
+pub async fn preview_policy(StrictJson(input): StrictJson<PolicyPreview>) -> Result<Json<Value>> {
+    if input.snapshot.metrics.len() > 64 || input.snapshot.inputs.len() > 32 {
+        return Err(ApiError::invalid("Preview evidence exceeds its bounds."));
+    }
+    let policy = ValidatedPolicy::try_from(input.policy)?;
+    let evaluation = krine_core::evaluate(&policy, &input.snapshot, &input.verification)?;
+    Ok(Json(json!({"synthetic": true, "evaluation": evaluation})))
+}
+
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct List {
@@ -173,7 +192,7 @@ pub async fn create_check(
         return Ok(Json(v));
     }
     let now = util::now();
-    let row=sqlx::query(&format!("INSERT INTO checks(name,description,draft,created_at,updated_at) VALUES($1,$2,$3,$4,$4) ON CONFLICT DO NOTHING RETURNING {CHECK_COLUMNS}")).bind(input.name).bind(input.description).bind(json!(Policy::default())).bind(now).fetch_optional(&mut *tx).await?.ok_or_else(||ApiError::conflict("input_conflict"))?;
+    let row=sqlx::query(&format!("INSERT INTO checks(name,description,draft,created_at,updated_at) VALUES($1,$2,$3,$4,$4) ON CONFLICT DO NOTHING RETURNING {CHECK_COLUMNS}")).bind(input.name).bind(input.description).bind(json!(Policy { schema_version: 2, entry: Some(krine_core::RuleAction::Deny), ..Policy::default() })).bind(now).fetch_optional(&mut *tx).await?.ok_or_else(||ApiError::conflict("input_conflict"))?;
     finish(tx, key, digest, detail(&row)).await
 }
 fn description(text: &str) -> Result<()> {
@@ -342,4 +361,53 @@ pub async fn version(
     Ok(Json(
         json!({"version":row.get::<i64,_>("version"),"published_at":row.get::<i64,_>("published_at"),"policy":row.get::<Value,_>("policy"),"restored_from_version":row.get::<Option<i64>,_>("restored_from_version")}),
     ))
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+
+    fn input(snapshot: Value) -> PolicyPreview {
+        serde_json::from_value(json!({
+            "policy": {"schema_version":2,"entry":{"goto":"gate"},"inputs":{"approved":"boolean"},"otherwise":"DENY","rules":[
+                {"id":"gate","condition":{"op":"compare","left":{"source":"input","name":"approved"},"comparison":"eq","value":true},"then":"ALLOW","on_false":"CHALLENGE","on_unknown":"DENY","on_verified":"ALLOW"}
+            ]}, "snapshot": snapshot
+        })).unwrap()
+    }
+
+    #[tokio::test]
+    async fn preview_preserves_three_valued_paths_without_an_application_or_stores() {
+        let Json(allowed) = preview_policy(StrictJson(input(
+            json!({"inputs":{"approved":true},"metrics":{}}),
+        )))
+        .await
+        .unwrap();
+        assert_eq!(allowed["synthetic"], true);
+        assert_eq!(allowed["evaluation"]["outcome"], "ALLOW");
+        let Json(missing) = preview_policy(StrictJson(input(json!({"inputs":{},"metrics":{}}))))
+            .await
+            .unwrap();
+        assert_eq!(missing["evaluation"]["outcome"], "DENY");
+        assert_eq!(
+            missing["evaluation"]["trace"][0]["condition"]["result"],
+            "unknown"
+        );
+        let mut candidate = input(json!({"inputs":{"approved":false},"metrics":{}}));
+        candidate
+            .verification
+            .insert("gate".into(), krine_core::Verification::Passed);
+        let Json(verified) = preview_policy(StrictJson(candidate)).await.unwrap();
+        assert_eq!(verified["evaluation"]["outcome"], "ALLOW");
+        assert_eq!(
+            verified["evaluation"]["trace"][0]["route"],
+            "verification_passed"
+        );
+        assert!(
+            preview_policy(StrictJson(input(
+                json!({"inputs":{"approved":"true"},"metrics":{}})
+            )))
+            .await
+            .is_err()
+        );
+    }
 }

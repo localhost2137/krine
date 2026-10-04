@@ -263,7 +263,8 @@ function CheckWorkspace({
   const [restore, setRestore] = useState<Version | null>(null);
   const editing =
     params.get("view") === "draft" ||
-    (draft.server.active_version === null && !params.has("version"));
+    (!params.has("version") &&
+      (draft.policy.schema_version === 2 || draft.server.active_version === null));
   const historical = params.has("version");
   const selectedVersion = historical
     ? Number(params.get("version"))
@@ -600,6 +601,7 @@ function CheckWorkspace({
         </>
       ) : selected ? (
         <>
+          {selected.policy.schema_version === 2 && <div className="workflow-preview-notice"><p>This is a read-only policy preview. Open the draft to add steps or change connections.</p><Link className="button primary" to={`?${changeSearch(params, { view: "draft", version: null })}`}>Open workflow editor</Link></div>}
           <PolicyRead policy={selected.policy} />
           {historical && (
             <button

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { api, errorMessage, mutation } from "./api";
@@ -14,6 +14,16 @@ export function App() {
   const dialog = useRef<HTMLDialogElement>(null);
   const password = useRef<HTMLInputElement>(null);
   const location = useLocation();
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  useEffect(() => setNavigationOpen(false), [location.pathname, location.search]);
+  useEffect(() => {
+    if (!navigationOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setNavigationOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [navigationOpen]);
   useEffect(() => {
     api.onUnauthorized = () => setReauthenticate(true);
     void api
@@ -34,8 +44,7 @@ export function App() {
   const section =
     location.pathname === "/inspect/check"
       ? "checks"
-      : location.pathname.startsWith("/inspect/") ||
-          location.pathname.startsWith("/entities/")
+      : location.pathname.startsWith("/inspect/") || location.pathname.startsWith("/entities/")
         ? "activity"
         : location.pathname.split("/")[1] || "overview";
   useEffect(() => {
@@ -99,39 +108,92 @@ export function App() {
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <header className="site-header">
-        <Link className="brand" to="/">
-          Krine<span className="deployment">{window.location.host}</span>
+      {navigationOpen && (
+        <button
+          className="navigation-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setNavigationOpen(false)}
+        />
+      )}
+      <header
+        id="workspace-navigation"
+        className={`site-header ${navigationOpen ? "navigation-open" : ""} ${!authenticated ? "login-brand" : ""}`}
+      >
+        <Link className="brand" to="/" aria-label="Krine overview">
+          <span className="brand-mark" aria-hidden="true">
+            κ
+          </span>
+          <span>Krine</span>
         </Link>
         {authenticated && (
           <>
             <nav aria-label="Main navigation">
-              <Link to="/" aria-current={section === "overview" ? "page" : undefined} className={section === "overview" ? "active" : undefined}>Overview</Link>
-              <Link
-                to="/checks"
-                aria-current={section === "checks" ? "page" : undefined}
-                className={section === "checks" ? "active" : undefined}
-              >
-                Checks
-              </Link>
-              <Link
-                to="/activity"
-                aria-current={section === "activity" ? "page" : undefined}
-                className={section === "activity" ? "active" : undefined}
-              >
-                Activity
-              </Link>
-              <Link
-                to="/metrics"
-                aria-current={section === "metrics" ? "page" : undefined}
-                className={section === "metrics" ? "active" : undefined}
-              >
-                Metrics
-              </Link>
+              <span className="nav-section nav-primary-label">Workspace</span>
+              {(
+                [
+                  [
+                    "/",
+                    "overview",
+                    "Overview",
+                    "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
+                  ],
+                  ["/activity", "activity", "Activity", "M2 12h4l3-8 6 16 3-8h4"],
+                  ["/checks", "checks", "Checks", "M4 4h6v6H4z M14 14h6v6h-6z M7 10v7h7 M10 7h7v7"],
+                  ["/metrics", "metrics", "Metrics", "M4 20V10 M10 20V4 M16 20v-8 M22 20V7"],
+                ] as const
+              ).map(([to, key, label, path]) => (
+                <Fragment key={key}>
+                  {key === "checks" && <span className="nav-section">Policy</span>}
+                  <Link
+                    to={to}
+                    aria-current={section === key ? "page" : undefined}
+                    className={section === key ? "active" : undefined}
+                  >
+                    <svg
+                      width="17"
+                      height="17"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      aria-hidden="true"
+                    >
+                      <path d={path} />
+                    </svg>
+                    {label}
+                  </Link>
+                </Fragment>
+              ))}
+              <span className="nav-section">System</span>
+              <NavLink to="/settings">
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="8" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Settings
+              </NavLink>
             </nav>
             <div className="header-utilities">
-              <NavLink to="/settings">Settings</NavLink>
+              <span className="account-avatar" aria-hidden="true">
+                KR
+              </span>
+              <span className="account-details">
+                <strong>Administrator</strong>
+                <span className="deployment" title={window.location.host}>
+                  {window.location.host}
+                </span>
+              </span>
               <button
+                aria-label="Sign out"
+                title="Sign out"
                 disabled={busy}
                 onClick={() => {
                   if (
@@ -142,31 +204,78 @@ export function App() {
                     void logout();
                 }}
               >
-                Sign out
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  aria-hidden="true"
+                >
+                  <path d="M9 4H4v16h5M14 8l4 4-4 4M8 12h10" />
+                </svg>
               </button>
             </div>
           </>
         )}
       </header>
-      <main id="main" tabIndex={-1}>
-        {!initialized ? (
-          <Loading />
-        ) : authenticated ? (
-          <>
-            <InstallationContext />
-            {error && !reauthenticate && <Notice>{error}</Notice>}
-            <Outlet />
-          </>
-        ) : (
-          loginForm
+      <main
+        id="main"
+        className={`workspace-main ${!authenticated ? "auth-main" : ""}`}
+        tabIndex={-1}
+      >
+        {authenticated && (
+          <div className="workspace-toolbar">
+            <button
+              className="navigation-toggle"
+              aria-label={navigationOpen ? "Close navigation" : "Open navigation"}
+              aria-expanded={navigationOpen}
+              aria-controls="workspace-navigation"
+              onClick={() => setNavigationOpen(!navigationOpen)}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                aria-hidden="true"
+              >
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M9 4v16" />
+              </svg>
+            </button>
+            <span>
+              {section === "settings"
+                ? "System"
+                : section === "checks" || section === "metrics"
+                  ? "Policy"
+                  : "Workspace"}
+            </span>
+            <span aria-hidden="true">›</span>
+            <strong>{section.charAt(0).toUpperCase() + section.slice(1)}</strong>
+          </div>
         )}
+        <div className="workspace-content">
+          {!initialized ? (
+            <Loading />
+          ) : authenticated ? (
+            <>
+              <InstallationContext />
+              {error && !reauthenticate && <Notice>{error}</Notice>}
+              <Outlet />
+            </>
+          ) : (
+            loginForm
+          )}
+        </div>
       </main>
       <dialog ref={dialog} onCancel={(event) => event.preventDefault()}>
         {authenticated ? loginForm : null}
       </dialog>
-      <footer className="site-footer">
-        Krine · Self-hosted trust decisions
-      </footer>
+      <footer className="site-footer">Krine · Self-hosted trust decisions</footer>
     </>
   );
 }

@@ -106,21 +106,33 @@ pub enum FinalAction {
     Deny,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum RuleAction {
     Allow,
     Deny,
     Challenge,
+    #[serde(rename = "goto")]
+    GoTo(String),
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum UnknownAction {
     #[default]
     Deny,
     Next,
     Challenge,
+    Allow,
+    #[serde(rename = "goto")]
+    GoTo(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Position {
+    pub x: f64,
+    pub y: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -131,12 +143,20 @@ pub struct Rule {
     pub then: RuleAction,
     #[serde(default)]
     pub on_unknown: UnknownAction,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_false: Option<RuleAction>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_verified: Option<RuleAction>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<Position>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
     pub schema_version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<RuleAction>,
     #[serde(default)]
     pub inputs: BTreeMap<String, ValueType>,
     #[serde(default)]
@@ -149,6 +169,7 @@ impl Default for Policy {
     fn default() -> Self {
         Self {
             schema_version: 1,
+            entry: None,
             inputs: BTreeMap::new(),
             rules: Vec::new(),
             otherwise: FinalAction::Deny,
@@ -170,7 +191,7 @@ impl fmt::Display for ValidationError {
 
 impl std::error::Error for ValidationError {}
 
-fn invalid(path: impl Into<String>, message: impl Into<String>) -> ValidationError {
+pub(crate) fn invalid(path: impl Into<String>, message: impl Into<String>) -> ValidationError {
     ValidationError {
         path: path.into(),
         message: message.into(),
@@ -225,10 +246,10 @@ impl TryFrom<Policy> for ValidatedPolicy {
     type Error = ValidationError;
 
     fn try_from(policy: Policy) -> Result<Self, Self::Error> {
-        if policy.schema_version != 1 {
+        if !matches!(policy.schema_version, 1 | 2) {
             return Err(invalid(
                 "schema_version",
-                "only policy schema 1 is supported",
+                "only policy schemas 1 and 2 are supported",
             ));
         }
         if policy.rules.len() > MAX_RULES {
@@ -315,6 +336,7 @@ impl TryFrom<Policy> for ValidatedPolicy {
                 }
             }
         }
+        crate::workflow::validate(&policy)?;
         Ok(Self(policy))
     }
 }
@@ -382,6 +404,7 @@ pub enum Verification {
 #[serde(rename_all = "snake_case")]
 pub enum DecisionReason {
     RuleMatched,
+    WorkflowBranch,
     UnknownDenied,
     Otherwise,
     VerificationRequired,
@@ -451,17 +474,23 @@ pub fn evaluate(
             "verification refers to an unknown rule",
         ));
     }
+    if policy.0.schema_version == 2 {
+        return crate::workflow::evaluate(&policy.0, snapshot, verified);
+    }
     let mut trace = Vec::new();
     for rule in &policy.0.rules {
         let condition = evaluate_condition(&rule.condition, snapshot);
         let (action, reason) = match condition.result {
             Truth::False => (None, DecisionReason::RuleMatched),
-            Truth::True => (Some(rule.then), DecisionReason::RuleMatched),
+            Truth::True => (Some(rule.then.clone()), DecisionReason::RuleMatched),
             Truth::Unknown => (
                 match rule.on_unknown {
                     UnknownAction::Deny => Some(RuleAction::Deny),
                     UnknownAction::Next => None,
                     UnknownAction::Challenge => Some(RuleAction::Challenge),
+                    UnknownAction::Allow | UnknownAction::GoTo(_) => {
+                        unreachable!("schema 1 validation excludes workflow actions")
+                    }
                 },
                 DecisionReason::UnknownDenied,
             ),
@@ -470,6 +499,9 @@ pub fn evaluate(
             None => (None, reason, Route::Next),
             Some(RuleAction::Allow) => (Some(Outcome::Allow), reason, Route::Allow),
             Some(RuleAction::Deny) => (Some(Outcome::Deny), reason, Route::Deny),
+            Some(RuleAction::GoTo(_)) => {
+                unreachable!("schema 1 validation excludes workflow actions")
+            }
             Some(RuleAction::Challenge) => match verified.get(&rule.id) {
                 None => (
                     Some(Outcome::ChallengeRequired),
@@ -534,7 +566,7 @@ fn observe(reference: &Reference, snapshot: &Snapshot) -> Observation {
     }
 }
 
-fn evaluate_condition(condition: &Condition, snapshot: &Snapshot) -> ConditionTrace {
+pub(crate) fn evaluate_condition(condition: &Condition, snapshot: &Snapshot) -> ConditionTrace {
     let (reference, children) = match condition {
         Condition::Compare { left, .. }
         | Condition::In { left, .. }

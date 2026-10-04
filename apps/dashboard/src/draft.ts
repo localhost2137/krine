@@ -1,3 +1,4 @@
+import { workflowError } from "./workflow";
 import { checkPath } from "./addresses";
 import { ApiError, definitiveMutationFailure, errorMessage } from "./api";
 import type { Api, Mutation } from "./api";
@@ -63,7 +64,7 @@ function validRecoveryPolicy(value: unknown): value is Policy {
   if (!value || typeof value !== "object") return false;
   const policy = value as Policy;
   if (
-    policy.schema_version !== 1 ||
+    ![1, 2].includes(policy.schema_version) ||
     !policy.inputs ||
     typeof policy.inputs !== "object" ||
     Array.isArray(policy.inputs) ||
@@ -126,14 +127,15 @@ function validRecoveryPolicy(value: unknown): value is Policy {
         return false;
     }
   };
+  const branch = (value: unknown) => typeof value === "string" ? ["ALLOW", "DENY", "CHALLENGE"].includes(value) : Boolean(value && typeof value === "object" && "goto" in value && typeof value.goto === "string");
   return policy.rules.every(
     (rule) =>
       rule &&
       typeof rule.id === "string" &&
-      ["ALLOW", "DENY", "CHALLENGE"].includes(rule.then) &&
-      ["DENY", "NEXT", "CHALLENGE"].includes(rule.on_unknown) &&
+      (policy.schema_version === 2 ? branch(rule.then) : typeof rule.then === "string" && ["ALLOW", "DENY", "CHALLENGE"].includes(rule.then)) &&
+      (policy.schema_version === 2 ? branch(rule.on_unknown) && branch(rule.on_false) : typeof rule.on_unknown === "string" && ["DENY", "NEXT", "CHALLENGE"].includes(rule.on_unknown)) &&
       condition(rule.condition, 1),
-  );
+  ) && !workflowError(policy);
 }
 function validIntent(value: unknown): value is Intent {
   if (!value || typeof value !== "object") return false;

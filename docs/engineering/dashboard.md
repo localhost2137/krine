@@ -6,7 +6,9 @@ The React dashboard in `apps/dashboard` follows the check-centered [information 
 
 Run `pnpm --filter @krine/dashboard dev`. Vite listens on `127.0.0.1:5174` and proxies `/v1` to `127.0.0.1:8080`, preserving the browser Origin. Configure `KRINE_ADMIN_ORIGIN=http://127.0.0.1:5174` on the development backend. The explicit port fails if occupied. Production hosting must serve the built application and API under the configured admin origin, with a history fallback for dashboard routes.
 
-`pnpm --filter @krine/dashboard build` typechecks and builds static assets; `pnpm --filter @krine/dashboard test` runs the editor, transport and persistence tests. The app uses system fonts and no remote assets.
+`pnpm --filter @krine/dashboard build` typechecks and builds static assets; `pnpm --filter @krine/dashboard test` runs the editor, transport and persistence tests. The app bundles Inter and JetBrains Mono variable WOFF2 fonts locally, including Latin and Latin Extended subsets. Their OFL licenses live beside the fonts in `apps/dashboard/src/fonts`; no remote assets are required.
+
+The owner-authorized Golden Sachs design is ported in `golden-theme.css`: graphite surfaces, violet accents, raised controls, table treatments, a 232px sidebar and a breadcrumb toolbar. `App.tsx` supplies the responsive shell, including a navigation drawer below 768px. The theme is loaded after the existing dashboard styles so existing domain-specific views retain their behavior.
 
 ## Draft and publication safety
 
@@ -37,3 +39,42 @@ Navigation warns before discarding entered values and stays on an unconfirmed sa
 ## Remaining MVP integration
 
 Before MVP acceptance, follow-up units must complete reversible relationship correction, observed connection evidence, and useful bounded Activity summaries. Provider configuration also requires the coordinated real-backend walkthrough after the matching backend unit is accepted. These remain required product gates.
+
+## Connected workflows
+
+Checks with workflow policies open their working draft directly, including checks
+with a published version. Explicit version links remain immutable. Add a condition, choose its evidence and
+connect each branch using the node ports or inspector selects. Steps can branch
+and join; their positions and array order do not determine execution. The server
+rejects loops and missing destinations. Unreachable steps are labeled. Removing
+a step redirects incoming connections to Deny. Changes use the existing draft
+recovery and reviewed publication lifecycle.
+
+Click an output to open a searchable block picker at that connector, or drag the
+output to reconnect it. The picker also offers existing steps as join destinations,
+excluding connections that would create a cycle. Insertion preserves the previous destination and makes
+room only in that continuation; unrelated branches retain their coordinates.
+Occupied insertion points use a free adjacent lane. Verification continuations
+are positioned relative to their verification node. Insertion preserves zoom and
+only pans enough to reveal the new step; Fit and Arrange remain explicit actions.
+The toolbar exposes undo/redo,
+Arrange, Fit, Inspect, Test path, Issues, Versions and a full-screen workspace.
+The inspector edits nested typed conditions and all three truth-value branches.
+Keyboard-accessible output buttons and branch selects complement spatial editing.
+
+Test path accepts known or unknown synthetic evidence and simulated verification
+states. It uses the server evaluator and highlights the returned path; changing
+inputs or the policy clears the result. It neither calls providers nor writes
+decision history. Versions links to the existing immutable version view.
+
+The node/output interactions, optical lens (`workflow/glass-optics.ts`), contextual
+picker and arrangement are adapted from the founder-owned
+`golden-sach/apps/web` workflow editor with the founder's permission. Krine's
+policy evaluation and persistence contracts remain authoritative.
+
+Old policies offer **Use workflow editor**, which converts only the draft and
+preserves all former implicit next-rule routes. Published and historical
+workflows use the same canvas with read-only step inspectors. There is no separate
+ordered steps list beneath the graph. See
+[ADR 0020](../decisions/0020-connected-policy-workflows.md) before upgrading or
+rolling back an installation that contains schema 2 policies.

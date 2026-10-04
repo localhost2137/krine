@@ -79,7 +79,9 @@ The server SDK returns a separate local union `{ source: "fallback", outcome: "A
 
 ## Policy and metric schema
 
-`Policy` is `{ schema_version: 1, inputs: { [name]: "number"|"boolean"|"string" }, rules: Rule[], otherwise: "ALLOW"|"DENY" }`. Defaults: empty inputs/rules, otherwise DENY. A rule is `{ id, condition, then: "ALLOW"|"DENY"|"CHALLENGE", on_unknown: "DENY"|"NEXT"|"CHALLENGE" }`; `on_unknown` defaults DENY. Rule IDs are unique and stable while editing.
+Legacy `Policy` is `{ schema_version: 1, inputs: { [name]: "number"|"boolean"|"string" }, rules: Rule[], otherwise: "ALLOW"|"DENY" }`. Defaults: empty inputs/rules, otherwise DENY. A rule is `{ id, condition, then: "ALLOW"|"DENY"|"CHALLENGE", on_unknown: "DENY"|"NEXT"|"CHALLENGE" }`; `on_unknown` defaults DENY. Rule IDs are unique and stable while editing.
+
+New checks use schema 2 connected workflows. They retain `inputs`, `rules` and a fixed `otherwise: "DENY"` compatibility field, and require `entry`. A destination is `"ALLOW"`, `"DENY"`, `"CHALLENGE"` or `{ "goto": "step_id" }`. Entry cannot challenge. Every step has `then`, `on_false` and `on_unknown` destinations; `NEXT` is forbidden. A step with any challenge branch requires `on_verified` (allow, deny or goto); other steps cannot have it. Verification failure, expiry and unavailability deny. Successful verification follows `on_verified`, rather than array order. All targets must exist and the entire graph must be acyclic, including disconnected steps. Only steps reachable from entry execute. Optional `position: { x, y }` holds finite layout coordinates within ±10,000 and has no execution effect. Schema 1 rejects these schema 2 fields and destinations. See [ADR 0020](../decisions/0020-connected-policy-workflows.md).
 
 References are `{ source: "metric", name, version: 1 }` or `{ source: "input", name }`. Conditions are discriminated by `op`:
 
@@ -92,7 +94,7 @@ References are `{ source: "metric", name, version: 1 }` or `{ source: "input", n
 | `all` / `any` | `conditions: Condition[]` | Nonempty AND / OR |
 | `not` | `condition: Condition` | Boolean negation |
 
-`Scalar` is a bounded JSON string, finite number or boolean, never null. Referenced metrics must exist at the exact pinned version; referenced inputs must be declared. Missing inputs are unknown; supplied undeclared or wrong-type inputs are rejected. Conditions evaluate true/false/unknown. AND is false if any child is false, otherwise unknown if any is unknown. OR is true if any child is true, otherwise unknown if any is unknown. NOT preserves unknown. Known checks explicitly turn missing data into false. An unresolved rule follows its `on_unknown` route. Rules run in order; final rules stop evaluation. Otherwise applies only after every rule continues.
+`Scalar` is a bounded JSON string, finite number or boolean, never null. Referenced metrics must exist at the exact pinned version; referenced inputs must be declared. Missing inputs are unknown; supplied undeclared or wrong-type inputs are rejected. Conditions evaluate true/false/unknown. AND is false if any child is false, otherwise unknown if any is unknown. OR is true if any child is true, otherwise unknown if any is unknown. NOT preserves unknown. Known checks explicitly turn missing data into false. An unresolved rule follows its `on_unknown` route. Schema 1 rules run in order; final rules stop evaluation and Otherwise applies only after every rule continues. Schema 2 follows explicit connections and ignores array order and Otherwise. Its captured reason summary includes `policy_schema_version: 2`; ordinary terminal branches use `workflow_branch` and retain the actual true, false or unknown condition result. Existing schema 1 summaries remain unchanged.
 
 The Rust `krine-core` serde types are the canonical policy/catalog/trace schema. `MetricDefinition` exposes name, version, kind, value_type, range, description, dependencies, source, missing and examples. Metric snapshots map stable metric names to `{ version, state: { status: "known", value }|{ status: "unknown", reason }, provenance: { source, observed_at } }`. Unknown reasons include missing, unavailable, timeout, stale, invalid and type_mismatch. Explanations persist the actual snapshot, typed trusted inputs, policy, provider revisions and relevant relationship IDs; current entity state never substitutes for past evidence.
 
@@ -309,6 +311,22 @@ inventory when `truncated` is true. See [ADR 0013](../decisions/0013-reversible-
 for correction cutoff, retention and current-metric semantics.
 
 ## Demonstration installation context
+
+### Synthetic policy preview
+
+`POST /v1/admin/policy-preview` requires the usual admin session and CSRF token.
+The body is `{policy,snapshot,verification?}` using the core policy, snapshot and
+verification types. The server validates the policy and typed evidence, limits
+the snapshot to 64 metrics and 32 inputs, and evaluates the submitted snapshot
+with the same core evaluator as a live check. The response is
+`{synthetic:true,evaluation}` with the outcome and ordered condition trace.
+
+This is a pure calculation: it reads no application state, calls no providers,
+publishes nothing and writes no decision or mutation receipt. Retrying it is safe
+without mutation-receipt recovery. Missing evidence remains unknown. Supplied
+verification states are simulation inputs, never evidence for a real operation.
+
+### Installation marker
 
 `GET /v1/admin/installation` requires the ordinary admin session and returns
 `{ sample_data: null }` on a normal installation. A completed, isolated demo

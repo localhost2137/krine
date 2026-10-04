@@ -1,3 +1,4 @@
+import { branchLabel, challenges } from "./workflow";
 import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -363,7 +364,7 @@ export function Activity() {
               <select name="reason" defaultValue={params.get("reason") ?? ""}>
                 {params.has("reason") &&
                   ![
-                    "rule_matched", "otherwise", "unknown_denied",
+                    "rule_matched", "workflow_branch", "otherwise", "unknown_denied",
                     "verification_required", "verification_failed",
                     "verification_expired", "verification_unavailable",
                   ].includes(params.get("reason")!) && (
@@ -373,6 +374,7 @@ export function Activity() {
                   )}
                 <option value="">Any reason</option>
                 <option value="rule_matched">Rule matched</option>
+                <option value="workflow_branch">Workflow branch</option>
                 <option value="otherwise">Default outcome</option>
                 <option value="unknown_denied">
                   Denied on unknown evidence
@@ -561,8 +563,7 @@ function OtherwiseEvidence({ record }: { record: DecisionDetail }) {
   return (
     <div className="decisive-evidence" aria-label="Otherwise captured evidence">
       <p>
-        {traces.length ? "Every rule continued." : "This policy has no rules."}{" "}
-        Otherwise {actionLabel(record.policy!.otherwise)}.
+        {record.policy!.schema_version === 2 ? `Workflow entry → ${branchLabel(record.policy!.entry, record.policy!)}.` : <>{traces.length ? "Every rule continued." : "This policy has no rules."} Otherwise {actionLabel(record.policy!.otherwise)}.</>}
       </p>
       {traces.slice(0, 3).map((trace) => {
         const index = record.policy!.rules.findIndex(
@@ -798,6 +799,7 @@ export function DecisionPage() {
               When {conditionLabel(rule.condition)}.<br />
               Then {actionLabel(rule.then)}. If unknown:{" "}
               {actionLabel(rule.on_unknown)}.
+              {record.policy?.schema_version === 2 && <> If not matched: {branchLabel(rule.on_false, record.policy)}. {challenges(rule) && <>If verified: {branchLabel(rule.on_verified, record.policy)}.</>}</>}
             </p>
           )}
           <Identifiers record={record} />
@@ -806,7 +808,10 @@ export function DecisionPage() {
             <details id="policy-path">
               <summary>Policy path</summary>
               <ol className="rules">
-                {record.policy.rules.map((policyRule, index) => {
+                {(record.policy.schema_version === 2
+                  ? [...record.evaluation.trace.map((trace) => record.policy!.rules.find((r) => r.id === trace.rule_id)!).filter(Boolean), ...record.policy.rules.filter((r) => !record.evaluation!.trace.some((t) => t.rule_id === r.id))]
+                  : record.policy.rules).map((policyRule) => {
+                  const index = record.policy!.rules.indexOf(policyRule);
                   const trace = record.evaluation!.trace.find(
                     (value) => value.rule_id === policyRule.id,
                   );
@@ -823,7 +828,7 @@ export function DecisionPage() {
                 })}
               </ol>
               {record.evaluation.reason === "otherwise" && (
-                <p>Otherwise → {actionLabel(record.policy.otherwise)}</p>
+                <p>{record.policy.schema_version === 2 ? `Workflow entry → ${branchLabel(record.policy.entry, record.policy)}` : `Otherwise → ${actionLabel(record.policy.otherwise)}`}</p>
               )}
             </details>
           )}

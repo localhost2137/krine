@@ -144,6 +144,7 @@ pub fn router(app: App) -> Router {
             get(admin::list_checks).post(admin::create_check),
         )
         .route("/v1/admin/checks/{name}", get(admin::get_check))
+        .route("/v1/admin/policy-preview", post(admin::preview_policy))
         .route("/v1/admin/checks/{name}/draft", put(admin::save_draft))
         .route("/v1/admin/checks/{name}/publications", post(admin::publish))
         .route("/v1/admin/checks/{name}/versions", get(admin::versions))

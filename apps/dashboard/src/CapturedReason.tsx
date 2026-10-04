@@ -76,12 +76,16 @@ function consistentReason(value: ReasonSummary) {
       value.rules.every((rule) =>
         rule.route === "next"
           ? rule.result === "false" || rule.result === "unknown"
-          : rule.route === "verification_passed" && rule.result !== "false",
+          : rule.route === "verification_passed" && (rule.result !== "false" || value.policy_schema_version === 2),
       )
     );
   const rule = value.rules[0]!;
   // These are evaluator metadata invariants, not a reevaluation of sampled leaves.
   switch (value.reason) {
+    case "workflow_branch":
+      return value.policy_schema_version === 2 &&
+        ((value.outcome === "ALLOW" && (rule.route === "allow" || rule.route === "verification_passed")) ||
+         (value.outcome === "DENY" && (rule.route === "deny" || rule.route === "verification_passed")));
     case "rule_matched":
       return (
         rule.result === "true" &&
@@ -98,7 +102,7 @@ function consistentReason(value: ReasonSummary) {
       return (
         value.outcome === "CHALLENGE_REQUIRED" &&
         rule.route === "challenge" &&
-        rule.result !== "false"
+        (rule.result !== "false" || value.policy_schema_version === 2)
       );
     case "verification_failed":
     case "verification_expired":
@@ -106,7 +110,7 @@ function consistentReason(value: ReasonSummary) {
       return (
         value.outcome === "DENY" &&
         rule.route === value.reason &&
-        rule.result !== "false"
+        (rule.result !== "false" || value.policy_schema_version === 2)
       );
     default:
       return false;
@@ -119,6 +123,7 @@ export function validReasonSummary(
   if (
     !object(value) ||
     value.schema_version !== 1 ||
+    (value.policy_schema_version !== undefined && value.policy_schema_version !== 2) ||
     !text(value.reason) ||
     value.reason !== decision.reason ||
     value.outcome !== decision.outcome ||
@@ -219,8 +224,11 @@ export function CapturedReason({
           (item) => item.observed_truncated || item.test_truncated,
         ),
     );
-  const headline =
-    value.scope === "otherwise"
+  const headline = value.reason === "workflow_branch"
+    ? `Step ${rule!.position} · ${rule!.route === "verification_passed" ? "verified" : rule!.result} branch`
+    : value.policy_schema_version === 2 && value.scope === "otherwise"
+    ? "Workflow entry decision"
+    : value.scope === "otherwise"
       ? value.rules.some((item) => item.route === "verification_passed")
         ? "Otherwise · verification passed, then continued"
         : value.rules.length === 0

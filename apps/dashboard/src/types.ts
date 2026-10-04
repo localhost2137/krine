@@ -12,14 +12,19 @@ export type Condition =
   | { op: "all"; conditions: Condition[] }
   | { op: "any"; conditions: Condition[] }
   | { op: "not"; condition: Condition };
+export type Branch = "ALLOW" | "DENY" | "CHALLENGE" | { goto: string };
 export interface Rule {
   id: string;
   condition: Condition;
-  then: "ALLOW" | "DENY" | "CHALLENGE";
-  on_unknown: "DENY" | "NEXT" | "CHALLENGE";
+  then: Branch;
+  on_unknown: Branch | "NEXT";
+  on_false?: Branch;
+  on_verified?: Branch;
+  position?: { x: number; y: number };
 }
 export interface Policy {
-  schema_version: 1;
+  schema_version: 1 | 2;
+  entry?: Branch;
   inputs: Record<string, ValueType>;
   rules: Rule[];
   otherwise: "ALLOW" | "DENY";
@@ -286,6 +291,7 @@ export interface ReasonEvidence {
   provenance: { source: string; observed_at: number } | null;
 }
 export interface ReasonSummary {
+  policy_schema_version?: 2;
   schema_version: 1;
   reason: string;
   outcome: "ALLOW" | "DENY" | "CHALLENGE_REQUIRED";

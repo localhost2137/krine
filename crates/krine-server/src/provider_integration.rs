@@ -1554,3 +1554,33 @@ mod addressing;
 
 #[path = "analytics_integration.rs"]
 mod analytics_tests;
+
+#[tokio::test]
+#[ignore = "requires three isolated stores"]
+async fn provider_workflow_false_branch_verifies_then_follows_pinned_connection() {
+    let f = Fixture::new().await;
+    f.configure("verification", 0, "workflow-test-secret").await;
+    let check = unique();
+    let condition = json!({"op":"compare","left":{"source":"metric","name":"client.age_seconds","version":1},"comparison":"lt","value":0});
+    f.policy(&check, json!({"schema_version":2,"entry":{"goto":"gate"},"inputs":{},"otherwise":"DENY","rules":[
+        {"id":"gate","condition":condition,"then":"DENY","on_false":"CHALLENGE","on_unknown":"DENY","on_verified":{"goto":"finish"}},
+        {"id":"skipped","condition":condition,"then":"DENY","on_false":"DENY","on_unknown":"DENY"},
+        {"id":"finish","condition":condition,"then":"DENY","on_false":"ALLOW","on_unknown":"DENY"}
+    ]})).await;
+    let (input, pending) = f.attempt(&check).await;
+    assert_eq!(pending["outcome"], "CHALLENGE_REQUIRED");
+    let token = f.token(&pending["challenge"]);
+    let allowed = json_ok(f.backend(&continuation(&input, &pending, &token))).await;
+    assert_eq!(allowed["outcome"], "ALLOW");
+    assert_eq!(allowed["decision_id"], pending["decision_id"]);
+    assert_eq!(json_ok(f.backend(&input)).await, allowed);
+    let detail = f.detail(&allowed).await;
+    let trace = detail["evaluation"]["trace"].as_array().unwrap();
+    assert_eq!(trace.len(), 2);
+    assert_eq!(trace[0]["rule_id"], "gate");
+    assert_eq!(trace[0]["condition"]["result"], "false");
+    assert_eq!(trace[0]["route"], "verification_passed");
+    assert_eq!(trace[1]["rule_id"], "finish");
+    assert_eq!(detail["reason_summary"]["policy_schema_version"], 2);
+    f.finish().await;
+}

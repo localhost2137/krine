@@ -31,6 +31,9 @@ fn with_condition(condition: Condition) -> Policy {
             condition,
             then: RuleAction::Allow,
             on_unknown: UnknownAction::Deny,
+            on_false: None,
+            on_verified: None,
+            position: None,
         }],
         ..Policy::default()
     }
@@ -144,6 +147,9 @@ fn first_final_rule_wins_and_otherwise_defaults_to_deny() {
         condition: is_true("b"),
         then: RuleAction::Deny,
         on_unknown: UnknownAction::Deny,
+        on_false: None,
+        on_verified: None,
+        position: None,
     });
     let result = run(policy, &snapshot(&[("a", true), ("b", true)]));
     assert_eq!(result.outcome, Outcome::Allow);
@@ -170,6 +176,9 @@ fn verification_never_directly_authorizes_and_cannot_skip_next_challenge() {
         condition: is_true("b"),
         then: RuleAction::Challenge,
         on_unknown: UnknownAction::Deny,
+        on_false: None,
+        on_verified: None,
+        position: None,
     });
     let policy = ValidatedPolicy::try_from(policy).unwrap();
     let evidence = snapshot(&[("a", true), ("b", true)]);

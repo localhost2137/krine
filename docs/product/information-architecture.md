@@ -72,11 +72,15 @@ Use ordinary links for records and references. Back returns to the previous list
 
 The list shows name, publication state and last activity. A draft indicator means unpublished changes exist; a published version identifies what is running. Show a text warning beside a check only when a known issue affects it. Avoid an invented overall health score.
 
-Opening a check shows its name, active version and readable policy. Keep **Edit policy** prominent. **View activity**, **Integration** and **Versions** are secondary links. Versions expands a compact list on this page. There is no overview tab, separate policy application or permanent inspector pane.
+Opening a check shows its name, active version and readable policy. Keep **Edit policy** prominent. **View activity**, **Integration** and **Versions** are secondary links. Versions expands a compact list on this page. There is no overview tab or separate policy application.
 
 Observed check usage belongs to filtered Activity. Overview and Activity use server aggregates over the selected interval, rather than counting the visible page. Show recorded Allow, Deny and currently Awaiting verification states. Unknown outcomes remain separate from a known denial caused by unknown evidence. Do not invent evaluation latency, missing-evidence totals or SDK fallback metrics. A check filter includes every policy version; version-specific impact requires an explicit supported filter.
 
 ### Policy editor
+
+New policies use the connected workflow editor adopted in [ADR 0020](../decisions/0020-connected-policy-workflows.md). A canvas and step inspector expose entry, true, false, unknown and verified destinations. Conditions retain the typed metric/input controls described below. Branch selectors and a step selector provide keyboard alternatives to dragging. A new workflow starts at Deny. Connections determine execution; array order and layout do not. Removing a step redirects incoming connections to Deny. Unreachable steps are visibly marked. Read-only workflows also include a complete textual route list.
+
+The following ordered-rule layout applies to **legacy schema 1 policies**. They retain their original semantics and can be explicitly converted in a draft. Schema 2 replaces Otherwise and implicit next-rule routes with explicit destinations, including the destination after successful verification.
 
 Use a vertical sequence of numbered **When → Then** rules followed by **Otherwise**. A matched allow or deny ends evaluation. A false condition proceeds to the next rule. Order is part of the policy and stays visible.
 

@@ -408,3 +408,17 @@ describe("publication and restoration recovery", () => {
     newer.dispose();
   });
 });
+
+it("recovers a schema 2 workflow draft after a lost save response", async () => {
+  const policy: Policy = { schema_version: 2, entry: { goto: "gate" }, otherwise: "DENY", inputs: {}, rules: [{ id: "gate", condition: { op: "known", value: { source: "metric", name: "ip.risk", version: 1 } }, then: "ALLOW", on_false: "DENY", on_unknown: "DENY", position: { x: 360, y: 100 } }] };
+  const run = vi.fn().mockRejectedValue(new ApiError(503, "unavailable", "Unavailable"));
+  const model = new DraftController({ run }, initial, sessionStorage);
+  model.edit(policy);
+  await model.save();
+  const replay = vi.fn().mockResolvedValue({ ...initial, draft_revision: 4, draft: policy });
+  const recovered = new DraftController({ run: replay }, initial, sessionStorage);
+  expect(recovered.state.policy).toEqual(policy);
+  await recovered.save();
+  expect(replay.mock.calls[0]![0]).toEqual(run.mock.calls[0]![0]);
+  expect(recovered.state.status).toBe("saved");
+});

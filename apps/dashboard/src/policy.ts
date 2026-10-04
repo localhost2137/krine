@@ -1,3 +1,4 @@
+import { workflowError } from "./workflow";
 import type {
   Condition,
   Metric,
@@ -35,8 +36,8 @@ export function sameJson(left: unknown, right: unknown): boolean {
   );
 }
 
-export const actionLabel = (value: string) =>
-  ({
+export const actionLabel = (value: string | { goto: string }) =>
+  typeof value === "object" ? `Go to ${value.goto}` : ({
     ALLOW: "Allow",
     DENY: "Deny",
     CHALLENGE: "Require verification",
@@ -111,6 +112,12 @@ export function policyChanges(
   before: Policy | undefined,
   after: Policy,
 ): string[] {
+  if (before && (before.schema_version === 2 || after.schema_version === 2)) {
+    if (sameJson(before, after)) return ["Policy behavior is unchanged."];
+    const withoutLayout = (policy: Policy) => ({ ...policy, rules: policy.rules.map(({ position: _position, ...rule }) => rule) });
+    if (sameJson(withoutLayout(before), withoutLayout(after))) return ["Canvas layout changed; execution behavior is unchanged."];
+    return [before.schema_version === 1 ? "Convert ordered rules to an explicit workflow. Review every connection below." : "Workflow updated. Review every connection below.", ...after.rules.filter((rule) => !sameJson(before.rules.find((old) => old.id === rule.id), rule)).map((rule) => `Updated step ${after.rules.indexOf(rule) + 1}: ${conditionLabel(rule.condition)}.`), ...before.rules.filter((rule) => !after.rules.some((next) => next.id === rule.id)).map((rule) => `Removed step ${before.rules.indexOf(rule) + 1}.`)];
+  }
   if (!before)
     return ["First publication. The complete policy below becomes active."];
   const changes: string[] = [];
@@ -156,6 +163,8 @@ export function policyChanges(
 }
 
 export function policyError(policy: Policy): string | null {
+  const graphError = workflowError(policy);
+  if (graphError) return graphError;
   let nodes = 0;
   const scalarValid = (value: unknown) =>
     typeof value === "boolean" ||

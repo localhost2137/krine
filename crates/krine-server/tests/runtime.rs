@@ -1127,3 +1127,48 @@ async fn installation_metadata_is_authenticated_read_only_and_absent_normally() 
         normal
     );
 }
+
+#[tokio::test]
+#[ignore = "requires isolated PostgreSQL, Valkey, ClickHouse and KRINE_* configuration"]
+async fn workflow_publication_evaluation_retry_and_captured_history() {
+    let r = Runtime::start().await;
+    let check = unique();
+    let policy = json!({"schema_version":2,"entry":{"goto":"gate"},"inputs":{"approved":"boolean"},"otherwise":"DENY","rules":[
+        {"id":"unreached","condition":{"op":"known","value":{"source":"input","name":"approved"}},"then":"DENY","on_false":"DENY","on_unknown":"DENY"},
+        {"id":"gate","condition":{"op":"compare","left":{"source":"input","name":"approved"},"comparison":"eq","value":true},"then":"ALLOW","on_false":"DENY","on_unknown":"DENY"}
+    ]});
+    r.create(&check, policy.clone()).await;
+    let context = r.context().await;
+    let proof = r.proof(&context, &check).await;
+    let mut body = request(&unique(), &check, &proof);
+    body["inputs"] = json!({"approved":true});
+    let first = ok(r.server("/v1/checks/evaluate").json(&body)).await;
+    assert_eq!(first["outcome"], "ALLOW");
+    assert_eq!(first["reason"], "workflow_branch");
+    let retry = ok(r.server("/v1/checks/evaluate").json(&body)).await;
+    assert_eq!(retry["decision_id"], first["decision_id"]);
+    let id = first["decision_id"].as_str().unwrap();
+    let detail = ok(r.admin(
+        reqwest::Method::GET,
+        &format!("/activity/decisions/{id}"),
+        &unique(),
+    ))
+    .await;
+    assert_eq!(detail["policy"], policy);
+    assert_eq!(detail["evaluation"]["trace"].as_array().unwrap().len(), 1);
+    assert_eq!(detail["evaluation"]["trace"][0]["rule_id"], "gate");
+    assert_eq!(detail["reason_summary"]["policy_schema_version"], 2);
+    let mut cycle = policy;
+    cycle["rules"][1]["then"] = json!({"goto":"gate"});
+    let response = r
+        .admin(
+            reqwest::Method::PUT,
+            &format!("/checks/{check}/draft"),
+            &unique(),
+        )
+        .json(&json!({"revision":2,"description":"Invalid cycle","policy":cycle}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+}

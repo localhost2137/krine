@@ -4,6 +4,7 @@
 mod catalog;
 mod explanation;
 mod policy;
+mod workflow;
 
 pub use catalog::*;
 pub use explanation::{ReasonCaptureError, capture_reason};

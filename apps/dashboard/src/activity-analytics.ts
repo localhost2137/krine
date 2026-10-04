@@ -364,6 +364,7 @@ export const exactUtc = (value: number) => new Date(value).toISOString();
 export const reasonName = (reason: string) =>
   ({
     rule_matched: "Rule matched",
+    workflow_branch: "Workflow branch",
     otherwise: "Default outcome",
     unknown_denied: "Denied on unknown evidence",
     verification_required: "Verification required",

@@ -7,6 +7,7 @@ import { CheckPage, Checks } from "./Checks";
 import { MetricPage, Metrics } from "./Metrics";
 import { Settings } from "./Settings";
 import "./style.css";
+import "./golden-theme.css";
 
 const router = createBrowserRouter([
   {

@@ -1,3 +1,4 @@
+import { branchLabel, challenges } from "./workflow";
 import { checkUrl } from "./addresses";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
@@ -22,7 +23,7 @@ function usesIntelligence(condition: Condition): boolean {
 }
 function relevant(rule: Rule, capability: Provider["capability"]) {
   return capability === "verification"
-    ? rule.then === "CHALLENGE" || rule.on_unknown === "CHALLENGE"
+    ? challenges(rule)
     : usesIntelligence(rule.condition);
 }
 const label = (capability: Provider["capability"]) =>
@@ -261,15 +262,16 @@ function ProviderPanel({
                               Rule {index + 1}: {conditionLabel(rule.condition)}
                               . Then {actionLabel(rule.then)}. If the condition
                               is unknown: {actionLabel(rule.on_unknown)}.
-                              {(rule.then === "CHALLENGE" ||
-                                rule.on_unknown === "CHALLENGE") &&
-                                " Verified continues below; failed, expired or unavailable verification denies."}
+                              {version.policy.schema_version === 2 && <> If not matched: {branchLabel(rule.on_false, version.policy)}.</>}
+                              {challenges(rule) && (version.policy.schema_version === 2
+                                ? ` Verified → ${branchLabel(rule.on_verified, version.policy)}; failed, expired or unavailable verification denies.`
+                                : " Verified continues below; failed, expired or unavailable verification denies.")}
                             </li>
                           ),
                       )}
                     </ul>
                     <p className="help">
-                      Otherwise {actionLabel(version.policy.otherwise)}.
+                      {version.policy.schema_version === 2 ? `Entry → ${branchLabel(version.policy.entry, version.policy)}.` : `Otherwise ${actionLabel(version.policy.otherwise)}.`}
                     </p>
                   </li>
                 ))}

@@ -73,6 +73,9 @@ pub fn capture_reason(detail: &Value) -> Result<Value> {
                 })
         });
     let mut summary = json!({"schema_version":1,"reason":detail["reason"],"outcome":detail["outcome"],"scope":if evaluation.rule_id.is_some(){"decisive_rule"}else{"otherwise"},"rule_id":evaluation.rule_id,"rules":rules,"rules_truncated":selected.len()>MAX_RULES,"provider_revisions":detail["provider_revisions"],"truncated":truncated});
+    if policy.schema_version == 2 {
+        summary["policy_schema_version"] = json!(2);
+    }
     // Control characters in strings expand under JSON escaping. Enforce the
     // serialized budget too, without silently substituting a different value.
     while serde_json::to_vec(&summary)

@@ -48,10 +48,11 @@ pub(crate) async fn revision(
 }
 pub(crate) fn needs(policy: &Policy, capability: &str) -> bool {
     if capability == "verification" {
-        return policy
-            .rules
-            .iter()
-            .any(|r| r.then == RuleAction::Challenge || r.on_unknown == UnknownAction::Challenge);
+        return policy.rules.iter().any(|r| {
+            r.then == RuleAction::Challenge
+                || r.on_unknown == UnknownAction::Challenge
+                || r.on_false == Some(RuleAction::Challenge)
+        });
     }
     policy.rules.iter().any(|r| needs_ip(&r.condition))
 }

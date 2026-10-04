@@ -1,4 +1,7 @@
-import { useId, useState } from "react";
+import { toWorkflow } from "./workflow";
+import { lazy, Suspense, useId, useState } from "react";
+const WorkflowEditor = lazy(() => import("./WorkflowEditor").then((module) => ({ default: module.WorkflowEditor })));
+const WorkflowRead = lazy(() => import("./WorkflowEditor").then((module) => ({ default: module.WorkflowRead })));
 import type { FormEvent } from "react";
 import { useAddressedParam } from "./addresses";
 import { InvestigationLink as Link } from "./navigation";
@@ -84,7 +87,7 @@ function ScalarField({
   );
 }
 
-function ConditionEditor({
+export function ConditionEditor({
   condition,
   policy,
   metrics,
@@ -440,6 +443,7 @@ function ConditionEditor({
 }
 
 export function PolicyRead({ policy }: { policy: Policy }) {
+  if (policy.schema_version === 2) return <Suspense fallback={<p className="help">Loading workflow…</p>}><WorkflowRead policy={policy} /></Suspense>;
   return (
     <div className="policy-read">
       {Object.keys(policy.inputs).length > 0 && (
@@ -482,7 +486,7 @@ export function VerificationBranches() {
   );
 }
 
-export function PolicyEditor({
+function LegacyPolicyEditor({
   policy,
   metrics,
   onChange,
@@ -587,7 +591,7 @@ export function PolicyEditor({
                   <label>
                     Then
                     <select
-                      value={rule.then}
+                      value={typeof rule.then === "string" ? rule.then : "DENY"}
                       onChange={(event) =>
                         updateRule(index, {
                           then: event.target.value as Rule["then"],
@@ -606,7 +610,7 @@ export function PolicyEditor({
                   <label>
                     If condition is unknown
                     <select
-                      value={rule.on_unknown}
+                      value={typeof rule.on_unknown === "string" ? rule.on_unknown : "DENY"}
                       onChange={(event) =>
                         updateRule(index, {
                           on_unknown: event.target.value as Rule["on_unknown"],
@@ -752,4 +756,9 @@ export function PolicyEditor({
       </details>
     </>
   );
+}
+
+export function PolicyEditor(props: { policy: Policy; metrics: Metric[]; onChange: (policy: Policy) => void }) {
+  if (props.policy.schema_version === 2) return <Suspense fallback={<p className="help">Loading workflow editor…</p>}><WorkflowEditor {...props} /></Suspense>;
+  return <><div className="workflow-upgrade"><div><strong>Build with connected steps</strong><p className="help">Convert this ordered policy into a workflow. The same paths are preserved in your draft.</p></div><button onClick={() => props.onChange(toWorkflow(props.policy))}>Use workflow editor</button></div><LegacyPolicyEditor {...props} /></>;
 }

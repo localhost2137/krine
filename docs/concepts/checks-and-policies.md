@@ -31,7 +31,7 @@ Published policies preserve their metric semantics. A metric upgrade is explicit
 
 ## Policy editor
 
-The primary policy interface is no-code and visual. The [MVP editor](../product/information-architecture.md#policy-editor) uses ordered rules with disclosed boolean groups and explicit unknown-data paths. [ADR 0008](../decisions/0008-check-centered-information-architecture.md) records its publication, restoration and verification defaults; [core flows](../product/core-flows.md) describe the interactions.
+The primary policy interface is no-code and visual. New policies use a connected workflow with explicit matched, unmatched, unknown and verified branches. See [ADR 0020](../decisions/0020-connected-policy-workflows.md) for the schema, validation and compatibility contract. Existing ordered policies remain readable and can be converted in their draft. The [MVP editor](../product/information-architecture.md#policy-editor) uses ordered rules with disclosed boolean groups and explicit unknown-data paths. [ADR 0008](../decisions/0008-check-centered-information-architecture.md) records its publication, restoration and verification defaults; [core flows](../product/core-flows.md) describe the interactions.
 
 Conceptually:
 
@@ -70,7 +70,7 @@ Arbitrary code execution is not an MVP requirement.
 
 Challenge is an intermediate policy outcome. When verification is required, the backend check returns `CHALLENGE_REQUIRED`; the application passes that requirement to the browser, which completes the selected provider's challenge.
 
-The browser then retries the protected request, and the backend retries the Krine check with the verification result. This continues the same logical protected action toward a final allow/deny result. Challenge completion does not itself authorize the action.
+The browser then retries the protected request, and the backend retries the Krine check with the verification result. This continues the same logical protected action toward a final allow/deny result. In a workflow, verified success follows the configured connection; in an ordered policy, it continues to the next rule. Challenge completion does not itself authorize the action.
 
 The policy asks for a normalized verification capability; the selected provider performs the concrete verification.
 
